@@ -1,0 +1,14 @@
+
+{
+    "model_name": "ResNet18",
+    "num_classes": 2,
+    "class_names": [
+        "Parasitized",
+        "Uninfected"
+    ],
+    "input_size": 224,
+    "threshold": 0.35,
+    "checkpoint": "best_resnet18_malaria.pth",
+    "validation_accuracy": 97.14,
+    "test_accuracy": 96.81
+}
