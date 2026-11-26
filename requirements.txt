@@ -10,3 +10,5 @@ Pillow
 grad-cam
 ipykernel
 jupyter
+google-genai
+python-dotenv
