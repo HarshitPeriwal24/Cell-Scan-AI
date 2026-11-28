@@ -1,9 +1,11 @@
+from backend.llm import generate_response
 
-from llm import generate_response
+if __name__ == "__main__":
+    print("Testing Gemini connection...\n")
 
-question = "Explain ResNet18 and how CellScan AI uses it."
+    response = generate_response(
+        "What is CellScan AI, and which model architecture does it use?"
+    )
 
-answer = generate_response(question)
-
-print("\nCellScan Generative AI Response:\n")
-print(answer)
+    print("Gemini Response:")
+    print(response)

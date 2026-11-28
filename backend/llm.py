@@ -1,9 +1,9 @@
 
-import requests
-
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL_NAME = "qwen2.5:3b"
-
+import os
+from google import genai
+from dotenv import load_dotenv
+load_dotenv()
+MODEL_NAME = "gemini-3.5-flash-lite"
 
 SYSTEM_PROMPT = """
 You are CellScan Assistant, a friendly and intelligent AI assistant
@@ -22,88 +22,72 @@ PROJECT KNOWLEDGE:
 - Backend: FastAPI.
 - Frontend: React and Vite.
 - Explainability: Grad-CAM.
-- Generative AI: Ollama with Qwen 2.5 3B.
+- Generative AI: Google Gemini API.
 
-RESPONSE STYLE — VERY IMPORTANT:
-
+RESPONSE STYLE:
 1. Keep answers concise and easy to read.
 2. Default to approximately 80-120 words.
-3. Use short paragraphs, ideally 1-3 sentences.
-4. Use bullet points for lists.
-5. Use numbered steps for processes.
-6. Use **bold** for important technical terms.
-7. Use Markdown headings only when they improve readability.
-8. Avoid unnecessary introductions and repeated conclusions.
-9. Do not write one enormous paragraph.
-10. Do not repeat the user's question.
-11. Answer the actual question directly.
-12. If the user asks for a detailed explanation, provide more detail.
-13. If the user asks a simple question, answer in 2-4 sentences.
-14. Maintain context when answering follow-up questions.
+3. Use short paragraphs and bullet points.
+4. Use numbered steps for processes.
+5. Use **bold** for important technical concepts.
+6. Use Markdown where helpful.
+7. Avoid unnecessary introductions.
+8. Answer the actual question directly.
+9. Provide more detail when explicitly requested.
+10. Maintain context in follow-up questions.
 
-CELLScan AI GUIDELINES:
+CELLSCAN AI GUIDELINES:
 - Explain technical concepts in simple language.
 - Do not invent training results or accuracy values.
-- Clearly distinguish prediction confidence from model accuracy.
+- Distinguish prediction confidence from model accuracy.
 - Explain that Grad-CAM shows influential image regions,
   not medically verified reasoning.
-- Never claim that CellScan AI provides a medical diagnosis.
-- Remind users that this is an educational prototype,
+- Never claim CellScan AI provides a medical diagnosis.
+- Remind users this is an educational prototype,
   not a replacement for professional medical testing.
 
 For unrelated questions, respond briefly and helpfully.
 """
 
-
 def generate_response(message: str, history=None) -> str:
 
-    messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT
-        }
-    ]
+    api_key = os.getenv("GEMINI_API_KEY")
 
-    # Include previous conversation for follow-up questions.
-    if history:
-        messages.extend(history[-10:])
-
-    messages.append({
-        "role": "user",
-        "content": message
-    })
+    if not api_key:
+        return "The AI assistant is not configured. Please contact the administrator."
 
     try:
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": MODEL_NAME,
-                "messages": messages,
-                "stream": False
-            },
-            timeout=180
+        client = genai.Client(api_key=api_key)
+
+        conversation = []
+
+        if history:
+            for item in history[-10:]:
+                role = item.get("role")
+                content = item.get("content", "")
+
+                if role in ["user", "assistant"] and content:
+                    conversation.append(f"{role}: {content}")
+
+        conversation.append(f"user: {message}")
+
+        prompt = (
+            SYSTEM_PROMPT
+            + "\n\nCONVERSATION HISTORY:\n"
+            + "\n".join(conversation)
+            + "\n\nassistant:"
         )
 
-        response.raise_for_status()
-
-        data = response.json()
-
-        return data["message"]["content"].strip()
-
-    except requests.exceptions.ConnectionError:
-        return (
-            "I cannot connect to Ollama right now. "
-            "Please make sure Ollama is running."
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt
         )
 
-    except requests.exceptions.Timeout:
-        return (
-            "The AI is taking longer than expected. "
-            "Please try again."
-        )
+        if not response.text:
+            return "The AI returned an empty response. Please try again."
 
-    except requests.exceptions.RequestException as error:
-        return f"Unable to generate a response: {error}"
+        return response.text.strip()
 
-    except (KeyError, ValueError):
-        return "The AI returned an unexpected response. Please try again."
+    except Exception as error:
+        print(f"Gemini API Error: {error}")
+        return "Unable to connect to the AI service right now. Please try again later."

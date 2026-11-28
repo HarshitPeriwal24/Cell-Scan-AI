@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from backend.llm import generate_response
 
 # --------------------------------------------------
@@ -31,14 +31,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Frontend development origins
+# Frontend development and production origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "https://cell-scan-ai.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -82,16 +83,15 @@ def health():
 
 class ChatRequest(BaseModel):
     message: str
-
+    history: list[dict] = Field(default_factory=list)  
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    response = generate_response(request.message)
-
-    return {
-        "success": True,
-        "reply": response
-    }
+    response = generate_response(
+        request.message,
+        request.history
+    )
+    return {"success": True, "reply": response}
 
 
 @app.post("/api/predict")

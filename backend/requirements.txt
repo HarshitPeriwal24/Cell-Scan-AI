@@ -1,0 +1,11 @@
+# Lean runtime deps for the deployed API (CPU-only torch keeps the image small)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchvision==0.20.1+cpu
+numpy<2.1
+Pillow
+fastapi
+uvicorn[standard]
+python-multipart
+google-genai
+python-dotenv
