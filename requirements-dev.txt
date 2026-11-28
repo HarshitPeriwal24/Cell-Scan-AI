@@ -1,14 +1,20 @@
+# Local development: notebooks, training and running the API.
+# The deployed server uses the lean requirements.txt instead.
 torch
 torchvision
-matplotlib
 numpy
+scipy
+Pillow
+matplotlib
 pandas
 scikit-learn
 seaborn
 tqdm
-Pillow
 grad-cam
 ipykernel
 jupyter
+fastapi
+uvicorn[standard]
+python-multipart
 google-genai
 python-dotenv
