@@ -1,4 +1,6 @@
 
+import ctypes
+import gc
 import os
 
 import torch
@@ -22,7 +24,7 @@ model, device, config = load_model()
 
 # A cell counts as infected when P(Parasitized) reaches this value.
 CELL_THRESHOLD = float(os.getenv("CELL_THRESHOLD", "0.5"))
-MAX_CELLS = int(os.getenv("MAX_CELLS", "150"))
+MAX_CELLS = int(os.getenv("MAX_CELLS", "120"))
 
 CLASS_NAMES = config["class_names"]
 
@@ -135,7 +137,16 @@ def create_visualization(original_image, grayscale_cam):
     return overlay
 
 
-def _classify(crops, batch_size=16):
+def _release_memory():
+    """Return freed memory to the OS (keeps the 512 MB free tier alive)."""
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass  # not glibc (Windows / macOS dev machines)
+
+
+def _classify(crops, batch_size=8):
     """Return P(Parasitized) for each PIL crop."""
     par_idx = CLASS_NAMES.index("Parasitized")
     probs = []
@@ -240,16 +251,19 @@ def analyze_image(image_path):
     image = ImageOps.exif_transpose(image).convert("RGB")   # phone photos
     stem = image_path.stem
 
-    if is_single_cell_crop(image):
-        return _single_cell_result(image, stem)
+    try:
+        if is_single_cell_crop(image):
+            return _single_cell_result(image, stem)
 
-    cells, _ = extract_cells(image, max_cells=MAX_CELLS)
-    if not cells:
-        raise ValueError(
-            "No blood cells were found in this image. Upload a microscope "
-            "image of a stained thin blood smear, or a single cropped cell."
-        )
-    return _slide_result(image, cells, stem)
+        cells, _ = extract_cells(image, max_cells=MAX_CELLS)
+        if not cells:
+            raise ValueError(
+                "No blood cells were found in this image. Upload a microscope "
+                "image of a stained thin blood smear, or a single cropped cell."
+            )
+        return _slide_result(image, cells, stem)
+    finally:
+        _release_memory()
 
 
 

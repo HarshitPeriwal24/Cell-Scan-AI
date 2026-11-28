@@ -17,6 +17,7 @@ from PIL import Image
 from scipy import ndimage as ndi
 
 MAX_SIDE = 1400          # downscale huge photos before segmenting
+MIN_CELL_DIAMETER = 24   # px; smaller cells carry too little detail to classify
 BLACK_LEVEL = 20         # pixel max-channel value treated as "black"
 
 
@@ -45,7 +46,7 @@ def _otsu(values: np.ndarray) -> float:
 
 def _foreground_mask(arr: np.ndarray) -> np.ndarray:
     """Cells are darker and more saturated than the smear background."""
-    rgb = arr.astype(np.float32)
+    rgb = arr.astype(np.float32, copy=False)
     mx = rgb.max(axis=2)
     mn = rgb.min(axis=2)
     saturation = (mx - mn) / np.maximum(mx, 1)
@@ -55,10 +56,10 @@ def _foreground_mask(arr: np.ndarray) -> np.ndarray:
         # percentile scaling so a few very dark pixels (arrows, stain
         # blobs, text) can't dominate the threshold
         lo, hi = np.percentile(x, [1, 99])
-        return np.clip((x - lo) / max(hi - lo, 1e-6), 0, 1)
+        return np.clip((x - lo) / max(hi - lo, 1e-6), 0, 1).astype(np.float32)
 
     score = 0.5 * robust(saturation) + 0.5 * robust(darkness)
-    score = ndi.gaussian_filter(score, 1.5)
+    score = ndi.gaussian_filter(score, 1.5, output=np.float32)
 
     mask = score > _otsu(score.ravel())
     mask = ndi.binary_opening(mask, iterations=2)
@@ -149,20 +150,21 @@ def extract_cells(image: Image.Image, max_cells: int = 150):
     objects = ndi.find_objects(labels)
     areas = ndi.sum(labels > 0, labels, index=np.arange(1, n + 1))
     typical = _typical_area(areas, h * w)
+    # Cell width from the inscribed radius of each object: unlike area it
+    # stays small even when tiny low-magnification cells merge into clumps.
+    inscribed = ndi.maximum(ndi.distance_transform_edt(labels > 0), labels,
+                            index=np.arange(1, n + 1))
+    inscribed = inscribed[areas >= max(30.0, 2e-4 * h * w)]
+    cell_width = 2 * float(np.median(inscribed)) if len(inscribed) else 0.0
+    if cell_width < MIN_CELL_DIAMETER:
+        raise ValueError(
+            "The cells in this image are too small to analyse (magnification "
+            "too low). Use a 100x oil-immersion field or zoom in so each red "
+            "blood cell is at least ~30 pixels wide."
+        )
 
-    cells = []
-    for idx, sl in enumerate(objects, start=1):
-        if sl is None:
-            continue
-        area = areas[idx - 1]
-        # drop debris/platelets and huge merged blobs
-        if area < 0.3 * typical or area > 3.0 * typical:
-            continue
+    def make_cell(idx, sl, area):
         ys, xs = sl
-        touches_edge = ys.start == 0 or xs.start == 0 or ys.stop >= h or xs.stop >= w
-        if touches_edge and area < 0.7 * typical:
-            continue  # mostly cut-off cell at the image border
-
         pad = 2
         y0, y1 = max(ys.start - pad, 0), min(ys.stop + pad, h)
         x0, x1 = max(xs.start - pad, 0), min(xs.stop + pad, w)
@@ -172,18 +174,44 @@ def extract_cells(image: Image.Image, max_cells: int = 150):
         # Stained cells are never near-black; this rejects arrows, text
         # and scale bars drawn on textbook / Google images.
         if np.median(crop[cell_mask].max(axis=1)) < 90:
-            continue
+            return None
         # White blood cells: larger than a red cell and dominated by a big
         # purple nucleus. The classifier never saw them and would read the
         # stain as a parasite, so leave them out.
         if area > 1.4 * typical and _purple_fraction(crop, cell_mask) > 0.18:
-            continue
+            return None
         crop[~cell_mask] = 0     # NIH crops have a pure black background
-        cells.append({
+        return {
             "crop": Image.fromarray(crop),
             "box": tuple(int(round(v / scale)) for v in (x0, y0, x1, y1)),
             "area": float(area),
-        })
+        }
+
+    cells, edge_cells = [], []
+    for idx, sl in enumerate(objects, start=1):
+        if sl is None:
+            continue
+        area = areas[idx - 1]
+        # drop debris/platelets and huge merged blobs
+        if area < 0.3 * typical or area > 3.0 * typical:
+            continue
+        ys, xs = sl
+        if ys.start <= 1 or xs.start <= 1 or ys.stop >= h - 1 or xs.stop >= w - 1:
+            # cut-off cells look abnormal and cause false alarms
+            edge_cells.append((idx, sl, area))
+            continue
+        cell = make_cell(idx, sl, area)
+        if cell:
+            cells.append(cell)
+
+    # Tiny close-up images may have every cell touching the border; then
+    # fall back to the edge cells that are still mostly complete.
+    if not cells:
+        for idx, sl, area in edge_cells:
+            if area >= 0.7 * typical:
+                cell = make_cell(idx, sl, area)
+                if cell:
+                    cells.append(cell)
 
     # On very large fields keep the most cell-like (closest to typical size).
     if len(cells) > max_cells:
