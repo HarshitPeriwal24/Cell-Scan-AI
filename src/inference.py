@@ -229,6 +229,10 @@ def _slide_result(image, cells, stem):
         "cells_analyzed": len(cells),
         "cells_parasitized": len(infected),
         "parasitemia": round(100 * len(infected) / len(cells), 2),
+        "cells": [
+            {"box": list(c["box"]), "p_parasitized": round(p, 4)}
+            for c, p in zip(cells, probs)
+        ],
         "gradcam_path": str(gradcam_path),
         "annotated_path": str(annotated_path),
     }

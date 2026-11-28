@@ -160,6 +160,7 @@ async def predict(file: UploadFile = File(...)):
                 "cells_analyzed": result["cells_analyzed"],
                 "cells_parasitized": result["cells_parasitized"],
                 "parasitemia": result["parasitemia"],
+                "cells": result["cells"],
                 "annotated_url":
                     f"/outputs/gradcam/{Path(result['annotated_path']).name}"
             })
