@@ -188,11 +188,11 @@ function App() {
           </button>
 
           <a
-            href="https://huggingface.co/"
+            href="https://github.com/HarshitPeriwal24/Cell-Scan-AI"
             target="_blank"
             rel="noreferrer"
           >
-            HF Space ↗
+            GitHub ↗
           </a>
         </div>
       </nav>
@@ -216,9 +216,10 @@ function App() {
         </h1>
 
         <p className="hero-description">
-          Upload a microscopy image of a blood cell. Our ResNet18
-          model classifies it as parasitized or uninfected and
-          provides prediction confidence and Grad-CAM visualization.
+          Upload a single blood cell or a full thin-smear microscope
+          image. Our ResNet18 model finds every red blood cell,
+          classifies each as parasitized or uninfected, and explains
+          its decision with Grad-CAM.
         </p>
 
         <div className="hero-buttons">
@@ -240,8 +241,9 @@ function App() {
         <h2>Upload a cell image</h2>
 
         <p>
-          Upload a blood cell microscopy image. The model will
-          return a prediction with confidence scores for both classes.
+          Upload a single cropped cell or a whole Giemsa-stained thin
+          blood smear field. Full slides are split into individual cells
+          and each one is classified.
         </p>
 
         <div className="detector-placeholder">
@@ -313,6 +315,30 @@ function App() {
                 <p className="confidence-text">
                   Confidence: {Number(result.confidence).toFixed(2)}%
                 </p>
+
+                {result.mode === 'slide' && (
+                  <div className="slide-summary">
+                    <p>
+                      <strong>{result.cells_parasitized}</strong> of{' '}
+                      <strong>{result.cells_analyzed}</strong> detected cells
+                      look parasitized (parasitemia{' '}
+                      {Number(result.parasitemia).toFixed(1)}%).
+                    </p>
+
+                    {result.annotated_url && (
+                      <img
+                        src={`${API_BASE_URL}${result.annotated_url}`}
+                        alt="Detected cells: red = parasitized, green = uninfected"
+                        className="gradcam-image"
+                      />
+                    )}
+
+                    <p className="slide-legend">
+                      Red boxes = parasitized, green = uninfected.
+                      Probabilities below are for the most suspicious cell.
+                    </p>
+                  </div>
+                )}
 
                 <div className="probability-section">
                   <h4>Class Probabilities</h4>

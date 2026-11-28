@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from pydantic import BaseModel, Field
 from backend.llm import generate_response
 
@@ -97,23 +98,19 @@ async def chat(request: ChatRequest):
 @app.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
 
-    allowed_types = ["image/jpeg", "image/png", "image/jpg"]
-
-    if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail="Please upload a JPG or PNG image."
-        )
+    allowed_extensions = {
+        ".jpg", ".jpeg", ".jfif", ".png", ".webp", ".bmp", ".tif", ".tiff"
+    }
 
     temp_dir = PROJECT_ROOT / "outputs" / "uploads"
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     extension = Path(file.filename or "").suffix.lower()
 
-    if extension not in [".jpg", ".jpeg", ".png"]:
+    if extension not in allowed_extensions:
         raise HTTPException(
             status_code=400,
-            detail="Invalid image extension."
+            detail="Please upload a JPG, PNG, WebP, BMP or TIFF image."
         )
 
     image_path = temp_dir / f"{uuid.uuid4().hex}{extension}"
@@ -135,17 +132,39 @@ async def predict(file: UploadFile = File(...)):
 
         image_path.write_bytes(contents)
 
-        result = analyze_image(image_path)
+        try:
+            Image.open(image_path).verify()
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="The uploaded file is not a readable image."
+            )
 
-        gradcam_file = Path(result["gradcam_path"]).name
+        try:
+            result = analyze_image(image_path)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error))
 
-        return {
+        response = {
             "success": True,
+            "mode": result["mode"],
             "prediction": result["prediction"],
             "confidence": result["confidence"],
             "probabilities": result["probabilities"],
-            "gradcam_url": f"/outputs/gradcam/{gradcam_file}"
+            "gradcam_url":
+                f"/outputs/gradcam/{Path(result['gradcam_path']).name}"
         }
+
+        if result["mode"] == "slide":
+            response.update({
+                "cells_analyzed": result["cells_analyzed"],
+                "cells_parasitized": result["cells_parasitized"],
+                "parasitemia": result["parasitemia"],
+                "annotated_url":
+                    f"/outputs/gradcam/{Path(result['annotated_path']).name}"
+            })
+
+        return response
 
     except HTTPException:
         raise
