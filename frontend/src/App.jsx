@@ -3,8 +3,11 @@ import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import ReactMarkdown from 'react-markdown';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+// Strip trailing slashes: "https://x.onrender.com/" + "/api/predict" would
+// become "//api/predict", which the backend answers with 404 Not Found.
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+).trim().replace(/\/+$/, '');
 
 function App() {
   const [chatOpen, setChatOpen] = useState(false);
