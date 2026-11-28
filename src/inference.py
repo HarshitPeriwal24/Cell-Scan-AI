@@ -150,7 +150,7 @@ def _release_memory():
         pass  # not glibc (Windows / macOS dev machines)
 
 
-def _classify(crops, batch_size=8):
+def _classify(crops, batch_size=4):
     """Return P(Parasitized) for each PIL crop."""
     par_idx = CLASS_NAMES.index("Parasitized")
     probs = []

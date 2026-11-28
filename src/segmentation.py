@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
-MAX_SIDE = 1400          # downscale huge photos before segmenting
+MAX_SIDE = 1200          # downscale huge photos before segmenting
 MIN_CELL_DIAMETER = 24   # px; smaller cells carry too little detail to classify
 BLACK_LEVEL = 20         # pixel max-channel value treated as "black"
 
