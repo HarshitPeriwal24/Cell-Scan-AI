@@ -24,6 +24,10 @@ model, device, config = load_model()
 
 # A cell counts as infected when P(Parasitized) reaches this value.
 CELL_THRESHOLD = float(os.getenv("CELL_THRESHOLD", "0.5"))
+# Slide is called Parasitized when >=2 cells reach STRONG_CELL or any one
+# cell reaches DEFINITE_CELL; otherwise flagged cells make it "Suspicious".
+STRONG_CELL = float(os.getenv("STRONG_CELL", "0.9"))
+DEFINITE_CELL = float(os.getenv("DEFINITE_CELL", "0.97"))
 MAX_CELLS = int(os.getenv("MAX_CELLS", "120"))
 
 CLASS_NAMES = config["class_names"]
@@ -213,10 +217,21 @@ def _slide_result(image, cells, stem):
     _gradcam_panel(crops[top], CLASS_NAMES.index(top_class), gradcam_path,
                    left_title="Most suspicious cell")
 
-    prediction = "Parasitized" if infected else "Uninfected"
-    # Slide-level score: how strongly the most suspicious cell is infected
+    # Slide verdict. The per-cell model wrongly flags ~2-3% of healthy cells
+    # (NIH test set), so one moderately suspicious cell among ~100 is not
+    # evidence of infection. Require strong evidence for "Parasitized" and
+    # report the in-between case honestly as "Suspicious".
+    strong = sum(p >= STRONG_CELL for p in probs)
     p_slide = probs[top]
-    confidence = p_slide if infected else 1 - p_slide
+    if strong >= 2 or p_slide >= DEFINITE_CELL:
+        prediction = "Parasitized"
+        confidence = p_slide
+    elif infected:
+        prediction = "Suspicious"
+        confidence = p_slide
+    else:
+        prediction = "Uninfected"
+        confidence = 1 - p_slide
 
     return {
         "mode": "slide",

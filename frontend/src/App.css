@@ -731,6 +731,10 @@ button {
   color: #45b985;
 }
 
+.status-suspicious {
+  color: #e7a33e;
+}
+
 .status-dot {
   width: 13px;
   height: 13px;

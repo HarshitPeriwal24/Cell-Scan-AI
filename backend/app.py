@@ -1,6 +1,14 @@
+import ctypes
 import sys
 import uuid
 from pathlib import Path
+
+# Limit glibc malloc arenas before torch spins up threads: each arena keeps
+# its own freed memory, which is what pushes a 512 MB instance over the edge.
+try:
+    ctypes.CDLL("libc.so.6").mallopt(-8, 2)   # M_ARENA_MAX = 2
+except (OSError, AttributeError):
+    pass
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,11 +75,25 @@ def home():
     }
 
 
+def _memory_mb():
+    """Current and peak resident memory (Linux only)."""
+    try:
+        status = Path("/proc/self/status").read_text()
+        fields = dict(
+            line.split(":", 1) for line in status.splitlines() if ":" in line
+        )
+        to_mb = lambda key: round(int(fields[key].split()[0]) / 1024)
+        return {"rss_mb": to_mb("VmRSS"), "peak_mb": to_mb("VmHWM")}
+    except (OSError, KeyError, ValueError):
+        return None
+
+
 @app.get("/api/health")
 def health():
     return {
         "status": "healthy",
-        "project": "CellScan AI"
+        "project": "CellScan AI",
+        "memory": _memory_mb()
     }
 
 # --------------------------------------------------

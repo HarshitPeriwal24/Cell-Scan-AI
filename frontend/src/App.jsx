@@ -305,11 +305,15 @@ function App() {
                   className={`prediction-status ${
                     result.prediction === 'Parasitized'
                       ? 'status-parasitized'
-                      : 'status-uninfected'
+                      : result.prediction === 'Suspicious'
+                        ? 'status-suspicious'
+                        : 'status-uninfected'
                   }`}
                 >
                   <span className="status-dot"></span>
-                  {result.prediction}
+                  {result.prediction === 'Suspicious'
+                    ? 'Suspicious — needs review'
+                    : result.prediction}
                 </div>
 
                 <p className="confidence-text">
@@ -336,6 +340,10 @@ function App() {
                     <p className="slide-legend">
                       Red boxes = parasitized, green = uninfected.
                       Probabilities below are for the most suspicious cell.
+                      {result.prediction === 'Suspicious' &&
+                        ' A few cells look possibly infected, but not strongly' +
+                        ' enough to rule out false alarms (platelets, stain' +
+                        ' debris). Check the red cells under the microscope.'}
                     </p>
                   </div>
                 )}
